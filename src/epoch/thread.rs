@@ -265,8 +265,24 @@ impl Scope {
     /// [`Garbage`]: struct.Garbage.html
     /// [`flush`]: struct.Scope.html#method.flush
     pub unsafe fn defer_free<T>(&self, ptr: Ptr<T>) {
+        self.defer_free_array(ptr, 1)
+    }
+
+    /// Stashes away an array that will later be freed.
+    ///
+    /// The array allocated at address `ptr` and consists of `count`
+    /// elements of type `T`.
+    ///
+    /// This function inserts the object into a thread-local buffer. When the buffers becomes full,
+    /// it's objects are flushed into the globally shared [`Garbage`] instance.
+    ///
+    /// If the object is unusually large, it is wise to follow up with a call to [`flush`] so that
+    /// it doesn't get stuck waiting in the buffer for a long time.
+    ///
+    /// [`Garbage`]: struct.Garbage.html
+    /// [`flush`]: struct.Scope.html#method.flush
+    pub unsafe fn defer_free_array<T>(&self, ptr: Ptr<T>, count: usize) {
         let object = ptr.as_raw();
-        let count = 1;
 
         unsafe fn free<T>(ptr: *mut T, count: usize) {
             // Free the memory, but don't run the destructors.
@@ -291,16 +307,25 @@ impl Scope {
 
     /// Adds an object that will later be dropped and freed.
     ///
-    /// The specified object is an array allocated at address `object` and consists of `count`
+    /// This method inserts the object into the garbage buffer. When the buffers becomes full, it's
+    /// objects are flushed into the garbage queue.
+    ///
+    /// Note: The object must be `Send + 'self`.
+    pub unsafe fn defer_drop<T>(&self, ptr: Ptr<T>) {
+        self.defer_drop_array(ptr, 1)
+    }
+
+    /// Adds an array that will later be dropped and freed.
+    ///
+    /// The array is allocated at address `ptr` and consists of `count`
     /// elements of type `T`.
     ///
     /// This method inserts the object into the garbage buffer. When the buffers becomes full, it's
     /// objects are flushed into the garbage queue.
     ///
     /// Note: The object must be `Send + 'self`.
-    pub unsafe fn defer_drop<T>(&self, ptr: Ptr<T>) {
+    pub unsafe fn defer_drop_array<T>(&self, ptr: Ptr<T>, count: usize) {
         let object = ptr.as_raw();
-        let count = 1;
 
         unsafe fn destruct<T>(ptr: *mut T, count: usize) {
             // Run the destructors and free the memory.
